@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 
-export default async function Home() {
+export default async function ChildLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient()
   const {
     data: { user },
@@ -15,5 +15,7 @@ export default async function Home() {
     .eq('id', user.id)
     .single()
 
-  redirect(profile?.role === 'parent' ? '/parent' : '/child')
+  if (profile?.role !== 'child') redirect('/parent')
+
+  return <>{children}</>
 }
