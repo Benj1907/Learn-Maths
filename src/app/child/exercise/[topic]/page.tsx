@@ -158,14 +158,21 @@ export default function ExercisePage() {
     if (correct) setScore((s) => s + 1)
 
     if (userId) {
-      supabase.from('exercise_attempts').insert({
-        user_id: userId,
-        topic: q.type,
-        question: q as unknown as Record<string, unknown>,
-        user_answer: userAnswer,
-        correct_answer: correctStr,
-        is_correct: correct,
-      })
+      supabase
+        .from('exercise_attempts')
+        .insert({
+          user_id: userId,
+          topic: q.type,
+          question: q as unknown as Record<string, unknown>,
+          user_answer: userAnswer,
+          correct_answer: correctStr,
+          is_correct: correct,
+        })
+        .then(({ error }) => {
+          if (error) console.error('Failed to save attempt:', error.message)
+        })
+    } else {
+      console.warn('No authenticated user — attempt not saved')
     }
   }
 
