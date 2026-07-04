@@ -2,7 +2,7 @@
 
 import { useSessionTimer } from '@/lib/session-timer'
 
-const DURATIONS = [15, 30] as const
+const DURATIONS = [5, 10, 15, 20, 25, 30] as const
 
 export function DurationPicker() {
   const { startSession } = useSessionTimer()
@@ -15,15 +15,15 @@ export function DurationPicker() {
           <h1 className="text-xl font-bold text-gray-900">Combien de temps veux-tu t&apos;entraîner ?</h1>
           <p className="text-sm text-gray-500 mt-1">Tu pourras faire plusieurs exercices différents pendant ce temps.</p>
         </div>
-        <div className="space-y-3">
+        <div className="grid grid-cols-3 gap-3">
           {DURATIONS.map((mins) => (
             <button
               key={mins}
               onClick={() => startSession(mins)}
-              className="w-full flex items-center gap-4 border-2 border-gray-100 hover:border-indigo-400 hover:bg-indigo-50 rounded-xl px-4 py-3 transition-colors text-left"
+              className="flex flex-col items-center gap-1 border-2 border-gray-100 hover:border-indigo-400 hover:bg-indigo-50 rounded-xl px-2 py-4 transition-colors"
             >
               <span className="text-2xl">⏱️</span>
-              <p className="font-semibold text-gray-800">{mins} minutes</p>
+              <p className="font-semibold text-gray-800">{mins} min</p>
             </button>
           ))}
         </div>
