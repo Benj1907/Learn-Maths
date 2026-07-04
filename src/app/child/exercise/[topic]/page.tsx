@@ -15,7 +15,13 @@ import {
 import type { Difficulty, ExerciseQuestion, Topic } from '@/types'
 import { DIFFICULTY_DESCRIPTIONS, DIFFICULTY_EMOJI, DIFFICULTY_LABELS, TOPIC_LABELS } from '@/types'
 
-const TOTAL = 10
+const DURATIONS = [15, 30] as const
+
+function formatTime(totalSeconds: number): string {
+  const m = Math.floor(totalSeconds / 60)
+  const s = totalSeconds % 60
+  return `${m}:${s.toString().padStart(2, '0')}`
+}
 
 function FractionDisplay({ num, den }: { num: number; den: number }) {
   if (den === 1) return <span className="text-2xl font-bold">{num}</span>
@@ -74,8 +80,11 @@ export default function ExercisePage() {
   const topic = params.topic as Topic
 
   const [difficulty, setDifficulty] = useState<Difficulty | null>(null)
-  const [questions, setQuestions] = useState<ExerciseQuestion[]>([])
-  const [currentIdx, setCurrentIdx] = useState(0)
+  const [duration, setDuration] = useState<number | null>(null)
+  const [timeLeft, setTimeLeft] = useState(0)
+  const [currentQ, setCurrentQ] = useState<ExerciseQuestion | null>(null)
+  const [questionNum, setQuestionNum] = useState(1)
+  const [answeredCount, setAnsweredCount] = useState(0)
   const [answer, setAnswer] = useState('')
   const [fracNum, setFracNum] = useState('')
   const [fracDen, setFracDen] = useState('')
@@ -94,20 +103,38 @@ export default function ExercisePage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  function startSession(d: Difficulty) {
-    const qs: ExerciseQuestion[] = Array.from({ length: TOTAL }, () => generateQuestion(topic, d))
-    setDifficulty(d)
-    setQuestions(qs)
-    setCurrentIdx(0)
+  // Countdown — ends the session the moment time runs out, even mid-question.
+  useEffect(() => {
+    if (!difficulty || !duration || done) return
+
+    const id = setInterval(() => {
+      setTimeLeft((t) => {
+        if (t <= 1) {
+          clearInterval(id)
+          setDone(true)
+          return 0
+        }
+        return t - 1
+      })
+    }, 1000)
+
+    return () => clearInterval(id)
+  }, [difficulty, duration, done])
+
+  function startSession(dur: number) {
+    if (!difficulty) return
+    setDuration(dur)
+    setTimeLeft(dur * 60)
+    setCurrentQ(generateQuestion(topic, difficulty))
+    setQuestionNum(1)
     setScore(0)
+    setAnsweredCount(0)
     setAnswer('')
     setFracNum('')
     setFracDen('')
     setSubmitted(false)
     setDone(false)
   }
-
-  const currentQ = questions[currentIdx]
 
   const handleSubmit = useCallback(
     async (selectedOption?: string) => {
@@ -155,6 +182,7 @@ export default function ExercisePage() {
   ) {
     setSubmitted(true)
     setIsCorrect(correct)
+    setAnsweredCount((c) => c + 1)
     if (correct) setScore((s) => s + 1)
 
     if (userId) {
@@ -177,15 +205,16 @@ export default function ExercisePage() {
   }
 
   function nextQuestion() {
-    if (currentIdx + 1 >= TOTAL) {
+    if (!difficulty || timeLeft <= 0) {
       setDone(true)
-    } else {
-      setCurrentIdx((i) => i + 1)
-      setAnswer('')
-      setFracNum('')
-      setFracDen('')
-      setSubmitted(false)
+      return
     }
+    setCurrentQ(generateQuestion(topic, difficulty))
+    setQuestionNum((n) => n + 1)
+    setAnswer('')
+    setFracNum('')
+    setFracDen('')
+    setSubmitted(false)
   }
 
   if (!TOPIC_LABELS[topic]) {
@@ -208,7 +237,7 @@ export default function ExercisePage() {
             {(['verte', 'orange', 'noire'] as Difficulty[]).map((d) => (
               <button
                 key={d}
-                onClick={() => startSession(d)}
+                onClick={() => setDifficulty(d)}
                 className="w-full flex items-center gap-4 border-2 border-gray-100 hover:border-indigo-400 hover:bg-indigo-50 rounded-xl px-4 py-3 transition-colors text-left"
               >
                 <span className="text-2xl">{DIFFICULTY_EMOJI[d]}</span>
@@ -224,36 +253,77 @@ export default function ExercisePage() {
     )
   }
 
+  if (!duration) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
+        <div className="bg-white rounded-2xl shadow-lg p-8 w-full max-w-sm">
+          <button
+            onClick={() => setDifficulty(null)}
+            className="text-sm text-gray-400 hover:text-gray-600 mb-6 block"
+          >
+            ← Retour
+          </button>
+          <h2 className="text-xl font-bold text-gray-900 mb-1">Combien de temps ?</h2>
+          <p className="text-sm text-gray-500 mb-6">{TOPIC_LABELS[topic]}</p>
+          <div className="space-y-3">
+            {DURATIONS.map((mins) => (
+              <button
+                key={mins}
+                onClick={() => startSession(mins)}
+                className="w-full flex items-center gap-4 border-2 border-gray-100 hover:border-indigo-400 hover:bg-indigo-50 rounded-xl px-4 py-3 transition-colors text-left"
+              >
+                <span className="text-2xl">⏱️</span>
+                <p className="font-semibold text-gray-800">{mins} minutes</p>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   if (done) {
-    const stars = score >= 8 ? 3 : score >= 6 ? 2 : score >= 4 ? 1 : 0
+    const pct = answeredCount > 0 ? Math.round((score / answeredCount) * 100) : 0
+    const stars = answeredCount === 0 ? 0 : pct >= 80 ? 3 : pct >= 50 ? 2 : pct >= 25 ? 1 : 0
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
         <div className="bg-white rounded-2xl shadow-lg p-8 max-w-sm w-full text-center">
           <div className="text-5xl mb-4">🎉</div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-1">Exercice terminé !</h2>
-          <p className="text-sm text-gray-400 mb-3">{DIFFICULTY_EMOJI[difficulty]} {DIFFICULTY_LABELS[difficulty]}</p>
-          <p className="text-5xl font-extrabold text-indigo-600 my-4">{score}/{TOTAL}</p>
+          <h2 className="text-2xl font-bold text-gray-900 mb-1">Temps écoulé !</h2>
+          <p className="text-sm text-gray-400 mb-3">{DIFFICULTY_EMOJI[difficulty]} {DIFFICULTY_LABELS[difficulty]} · {duration} min</p>
+          <p className="text-5xl font-extrabold text-indigo-600 my-4">{score}/{answeredCount}</p>
           <p className="text-3xl mb-6">{'⭐'.repeat(stars)}{'☆'.repeat(3 - stars)}</p>
           <p className="text-gray-500 text-sm mb-6">
-            {score === TOTAL
+            {answeredCount === 0
+              ? "Le temps a filé avant la première réponse, essaie encore !"
+              : pct === 100
               ? 'Parfait ! Bravo !'
-              : score >= 8
+              : pct >= 80
               ? 'Excellent travail !'
-              : score >= 6
+              : pct >= 60
               ? 'Bien joué, continue comme ça !'
-              : score >= 4
+              : pct >= 40
               ? 'Pas mal, entraîne-toi encore !'
               : 'Continue, tu vas y arriver !'}
           </p>
           <div className="space-y-3">
             <button
-              onClick={() => startSession(difficulty)}
+              onClick={() => startSession(duration)}
               className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2.5 rounded-xl transition-colors"
             >
               Recommencer
             </button>
             <button
-              onClick={() => setDifficulty(null)}
+              onClick={() => setDuration(null)}
+              className="w-full border border-gray-200 hover:bg-gray-50 text-gray-600 font-semibold py-2.5 rounded-xl transition-colors"
+            >
+              Changer la durée
+            </button>
+            <button
+              onClick={() => {
+                setDifficulty(null)
+                setDuration(null)
+              }}
               className="w-full border border-gray-200 hover:bg-gray-50 text-gray-600 font-semibold py-2.5 rounded-xl transition-colors"
             >
               Changer de niveau
@@ -270,7 +340,9 @@ export default function ExercisePage() {
     )
   }
 
-  const progress = Math.round((currentIdx / TOTAL) * 100)
+  if (!currentQ) return null
+
+  const progress = Math.round(((duration * 60 - timeLeft) / (duration * 60)) * 100)
 
   return (
     <div className="min-h-screen bg-gray-50 px-4 py-8">
@@ -284,7 +356,7 @@ export default function ExercisePage() {
             ← Retour
           </button>
           <span className="text-sm font-medium text-gray-600">
-            {currentIdx + 1} / {TOTAL}
+            ⏱️ {formatTime(timeLeft)}
           </span>
         </div>
 
@@ -298,7 +370,7 @@ export default function ExercisePage() {
 
         {/* Topic label */}
         <p className="text-xs uppercase tracking-wide text-gray-400 mb-1">
-          {TOPIC_LABELS[topic]}
+          {TOPIC_LABELS[topic]} · Question {questionNum}
         </p>
 
         {/* Question card */}
@@ -401,13 +473,13 @@ export default function ExercisePage() {
             onClick={nextQuestion}
             className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 rounded-xl transition-colors"
           >
-            {currentIdx + 1 < TOTAL ? 'Question suivante →' : 'Voir les résultats'}
+            Question suivante →
           </button>
         )}
 
         {/* Running score */}
         <p className="text-center text-sm text-gray-400 mt-4">
-          Score actuel : {score} / {currentIdx + (submitted ? 1 : 0)}
+          Score actuel : {score} / {answeredCount}
         </p>
       </div>
     </div>

@@ -123,7 +123,7 @@ export default async function ChildHome() {
         </div>
 
         <p className="text-center text-gray-400 text-sm mt-10">
-          Chaque série = 10 questions · Bonne chance ! 🍀
+          Choisis ta durée (15 ou 30 min) · Bonne chance ! 🍀
         </p>
       </div>
     </div>
