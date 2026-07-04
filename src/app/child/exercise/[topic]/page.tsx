@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { useSessionTimer } from '@/lib/session-timer'
 import {
   generateDivisionQuestion,
   generateFractionAdditionQuestion,
@@ -14,14 +15,6 @@ import {
 } from '@/lib/exercises'
 import type { Difficulty, ExerciseQuestion, Topic } from '@/types'
 import { DIFFICULTY_DESCRIPTIONS, DIFFICULTY_EMOJI, DIFFICULTY_LABELS, TOPIC_LABELS } from '@/types'
-
-const DURATIONS = [15, 30] as const
-
-function formatTime(totalSeconds: number): string {
-  const m = Math.floor(totalSeconds / 60)
-  const s = totalSeconds % 60
-  return `${m}:${s.toString().padStart(2, '0')}`
-}
 
 function FractionDisplay({ num, den }: { num: number; den: number }) {
   if (den === 1) return <span className="text-2xl font-bold">{num}</span>
@@ -78,10 +71,9 @@ export default function ExercisePage() {
   const params = useParams()
   const router = useRouter()
   const topic = params.topic as Topic
+  const { active: sessionActive } = useSessionTimer()
 
   const [difficulty, setDifficulty] = useState<Difficulty | null>(null)
-  const [duration, setDuration] = useState<number | null>(null)
-  const [timeLeft, setTimeLeft] = useState(0)
   const [currentQ, setCurrentQ] = useState<ExerciseQuestion | null>(null)
   const [questionNum, setQuestionNum] = useState(1)
   const [answeredCount, setAnsweredCount] = useState(0)
@@ -91,7 +83,6 @@ export default function ExercisePage() {
   const [submitted, setSubmitted] = useState(false)
   const [isCorrect, setIsCorrect] = useState(false)
   const [score, setScore] = useState(0)
-  const [done, setDone] = useState(false)
   const [userId, setUserId] = useState<string | null>(null)
 
   const supabase = createClient()
@@ -103,29 +94,14 @@ export default function ExercisePage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Countdown — ends the session the moment time runs out, even mid-question.
+  // No overall session running (e.g. direct link, or it already ended) — nothing to do here.
   useEffect(() => {
-    if (!difficulty || !duration || done) return
+    if (!sessionActive) router.replace('/child')
+  }, [sessionActive, router])
 
-    const id = setInterval(() => {
-      setTimeLeft((t) => {
-        if (t <= 1) {
-          clearInterval(id)
-          setDone(true)
-          return 0
-        }
-        return t - 1
-      })
-    }, 1000)
-
-    return () => clearInterval(id)
-  }, [difficulty, duration, done])
-
-  function startSession(dur: number) {
-    if (!difficulty) return
-    setDuration(dur)
-    setTimeLeft(dur * 60)
-    setCurrentQ(generateQuestion(topic, difficulty))
+  function startTopicSession(d: Difficulty) {
+    setDifficulty(d)
+    setCurrentQ(generateQuestion(topic, d))
     setQuestionNum(1)
     setScore(0)
     setAnsweredCount(0)
@@ -133,7 +109,6 @@ export default function ExercisePage() {
     setFracNum('')
     setFracDen('')
     setSubmitted(false)
-    setDone(false)
   }
 
   const handleSubmit = useCallback(
@@ -205,10 +180,7 @@ export default function ExercisePage() {
   }
 
   function nextQuestion() {
-    if (!difficulty || timeLeft <= 0) {
-      setDone(true)
-      return
-    }
+    if (!difficulty) return
     setCurrentQ(generateQuestion(topic, difficulty))
     setQuestionNum((n) => n + 1)
     setAnswer('')
@@ -220,6 +192,8 @@ export default function ExercisePage() {
   if (!TOPIC_LABELS[topic]) {
     return <p className="p-8 text-center text-red-500">Thème inconnu.</p>
   }
+
+  if (!sessionActive) return null
 
   if (!difficulty) {
     return (
@@ -237,7 +211,7 @@ export default function ExercisePage() {
             {(['verte', 'orange', 'noire'] as Difficulty[]).map((d) => (
               <button
                 key={d}
-                onClick={() => setDifficulty(d)}
+                onClick={() => startTopicSession(d)}
                 className="w-full flex items-center gap-4 border-2 border-gray-100 hover:border-indigo-400 hover:bg-indigo-50 rounded-xl px-4 py-3 transition-colors text-left"
               >
                 <span className="text-2xl">{DIFFICULTY_EMOJI[d]}</span>
@@ -253,125 +227,23 @@ export default function ExercisePage() {
     )
   }
 
-  if (!duration) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
-        <div className="bg-white rounded-2xl shadow-lg p-8 w-full max-w-sm">
-          <button
-            onClick={() => setDifficulty(null)}
-            className="text-sm text-gray-400 hover:text-gray-600 mb-6 block"
-          >
-            ← Retour
-          </button>
-          <h2 className="text-xl font-bold text-gray-900 mb-1">Combien de temps ?</h2>
-          <p className="text-sm text-gray-500 mb-6">{TOPIC_LABELS[topic]}</p>
-          <div className="space-y-3">
-            {DURATIONS.map((mins) => (
-              <button
-                key={mins}
-                onClick={() => startSession(mins)}
-                className="w-full flex items-center gap-4 border-2 border-gray-100 hover:border-indigo-400 hover:bg-indigo-50 rounded-xl px-4 py-3 transition-colors text-left"
-              >
-                <span className="text-2xl">⏱️</span>
-                <p className="font-semibold text-gray-800">{mins} minutes</p>
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  if (done) {
-    const pct = answeredCount > 0 ? Math.round((score / answeredCount) * 100) : 0
-    const stars = answeredCount === 0 ? 0 : pct >= 80 ? 3 : pct >= 50 ? 2 : pct >= 25 ? 1 : 0
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
-        <div className="bg-white rounded-2xl shadow-lg p-8 max-w-sm w-full text-center">
-          <div className="text-5xl mb-4">🎉</div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-1">Temps écoulé !</h2>
-          <p className="text-sm text-gray-400 mb-3">{DIFFICULTY_EMOJI[difficulty]} {DIFFICULTY_LABELS[difficulty]} · {duration} min</p>
-          <p className="text-5xl font-extrabold text-indigo-600 my-4">{score}/{answeredCount}</p>
-          <p className="text-3xl mb-6">{'⭐'.repeat(stars)}{'☆'.repeat(3 - stars)}</p>
-          <p className="text-gray-500 text-sm mb-6">
-            {answeredCount === 0
-              ? "Le temps a filé avant la première réponse, essaie encore !"
-              : pct === 100
-              ? 'Parfait ! Bravo !'
-              : pct >= 80
-              ? 'Excellent travail !'
-              : pct >= 60
-              ? 'Bien joué, continue comme ça !'
-              : pct >= 40
-              ? 'Pas mal, entraîne-toi encore !'
-              : 'Continue, tu vas y arriver !'}
-          </p>
-          <div className="space-y-3">
-            <button
-              onClick={() => startSession(duration)}
-              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2.5 rounded-xl transition-colors"
-            >
-              Recommencer
-            </button>
-            <button
-              onClick={() => setDuration(null)}
-              className="w-full border border-gray-200 hover:bg-gray-50 text-gray-600 font-semibold py-2.5 rounded-xl transition-colors"
-            >
-              Changer la durée
-            </button>
-            <button
-              onClick={() => {
-                setDifficulty(null)
-                setDuration(null)
-              }}
-              className="w-full border border-gray-200 hover:bg-gray-50 text-gray-600 font-semibold py-2.5 rounded-xl transition-colors"
-            >
-              Changer de niveau
-            </button>
-            <button
-              onClick={() => router.push('/child')}
-              className="w-full border border-gray-300 hover:bg-gray-50 text-gray-700 font-semibold py-2.5 rounded-xl transition-colors"
-            >
-              Choisir un autre thème
-            </button>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
   if (!currentQ) return null
-
-  const progress = Math.round(((duration * 60 - timeLeft) / (duration * 60)) * 100)
 
   return (
     <div className="min-h-screen bg-gray-50 px-4 py-8">
       <div className="max-w-lg mx-auto">
         {/* Header */}
-        <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center justify-between mb-4">
           <button
             onClick={() => router.push('/child')}
             className="text-sm text-gray-500 hover:text-gray-700"
           >
-            ← Retour
+            ← Changer d&apos;exercice
           </button>
-          <span className="text-sm font-medium text-gray-600">
-            ⏱️ {formatTime(timeLeft)}
+          <span className="text-xs uppercase tracking-wide text-gray-400">
+            {TOPIC_LABELS[topic]} · Question {questionNum}
           </span>
         </div>
-
-        {/* Progress bar */}
-        <div className="w-full bg-gray-200 rounded-full h-2.5 mb-6">
-          <div
-            className="bg-indigo-500 h-2.5 rounded-full transition-all"
-            style={{ width: `${progress}%` }}
-          />
-        </div>
-
-        {/* Topic label */}
-        <p className="text-xs uppercase tracking-wide text-gray-400 mb-1">
-          {TOPIC_LABELS[topic]} · Question {questionNum}
-        </p>
 
         {/* Question card */}
         <div className="bg-white rounded-2xl shadow p-6 mb-4">

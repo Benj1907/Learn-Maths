@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { SessionTimerBar } from '@/lib/session-timer'
 
 export default async function ChildLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient()
@@ -17,5 +18,10 @@ export default async function ChildLayout({ children }: { children: React.ReactN
 
   if (profile?.role !== 'child') redirect('/parent')
 
-  return <>{children}</>
+  return (
+    <>
+      <SessionTimerBar />
+      {children}
+    </>
+  )
 }

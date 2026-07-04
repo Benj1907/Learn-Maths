@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
+import { ChildHomeGate } from '@/components/ChildHomeGate'
 import type { Topic } from '@/types'
 import { TOPIC_LABELS, TOPIC_ICONS } from '@/types'
 
@@ -62,70 +63,72 @@ export default async function ChildHome() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-10 px-4">
-      <div className="max-w-lg mx-auto">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">
-              Bonjour {profile?.display_name ?? 'toi'} ! 👋
-            </h1>
-            <p className="text-gray-500 mt-0.5">Quel thème veux-tu travailler ?</p>
-          </div>
-          <form action={logout}>
-            <button
-              type="submit"
-              className="text-sm text-gray-500 hover:text-gray-700 underline"
-            >
-              Déconnexion
-            </button>
-          </form>
-        </div>
-
-        {/* Topic cards */}
-        <div className="space-y-4">
-          {TOPICS.map((topic) => {
-            const { total, correct } = progressByTopic[topic]
-            const pct = total > 0 ? Math.round((correct / total) * 100) : -1
-            const stars = pct >= 0 ? starsForPct(pct) : -1
-
-            return (
-              <div
-                key={topic}
-                className={`bg-gradient-to-r ${TOPIC_GRADIENT[topic]} rounded-2xl p-5 text-white shadow`}
+    <ChildHomeGate>
+      <div className="min-h-screen bg-gray-50 py-10 px-4">
+        <div className="max-w-lg mx-auto">
+          {/* Header */}
+          <div className="flex items-center justify-between mb-8">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">
+                Bonjour {profile?.display_name ?? 'toi'} ! 👋
+              </h1>
+              <p className="text-gray-500 mt-0.5">Quel thème veux-tu travailler ?</p>
+            </div>
+            <form action={logout}>
+              <button
+                type="submit"
+                className="text-sm text-gray-500 hover:text-gray-700 underline"
               >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <span className="text-3xl">{TOPIC_ICONS[topic]}</span>
-                    <div>
-                      <h2 className="font-semibold text-lg leading-tight">
-                        {TOPIC_LABELS[topic]}
-                      </h2>
-                      {stars >= 0 ? (
-                        <p className="text-sm text-white/80 mt-0.5">
-                          {'⭐'.repeat(stars)}{'☆'.repeat(3 - stars)} {pct}% de réussite
-                        </p>
-                      ) : (
-                        <p className="text-sm text-white/80 mt-0.5">Pas encore commencé</p>
-                      )}
-                    </div>
-                  </div>
-                  <Link
-                    href={`/child/exercise/${topic}`}
-                    className="bg-white/20 hover:bg-white/30 text-white font-semibold px-4 py-2 rounded-xl text-sm transition-colors"
-                  >
-                    Commencer
-                  </Link>
-                </div>
-              </div>
-            )
-          })}
-        </div>
+                Déconnexion
+              </button>
+            </form>
+          </div>
 
-        <p className="text-center text-gray-400 text-sm mt-10">
-          Choisis ta durée (15 ou 30 min) · Bonne chance ! 🍀
-        </p>
+          {/* Topic cards */}
+          <div className="space-y-4">
+            {TOPICS.map((topic) => {
+              const { total, correct } = progressByTopic[topic]
+              const pct = total > 0 ? Math.round((correct / total) * 100) : -1
+              const stars = pct >= 0 ? starsForPct(pct) : -1
+
+              return (
+                <div
+                  key={topic}
+                  className={`bg-gradient-to-r ${TOPIC_GRADIENT[topic]} rounded-2xl p-5 text-white shadow`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <span className="text-3xl">{TOPIC_ICONS[topic]}</span>
+                      <div>
+                        <h2 className="font-semibold text-lg leading-tight">
+                          {TOPIC_LABELS[topic]}
+                        </h2>
+                        {stars >= 0 ? (
+                          <p className="text-sm text-white/80 mt-0.5">
+                            {'⭐'.repeat(stars)}{'☆'.repeat(3 - stars)} {pct}% de réussite
+                          </p>
+                        ) : (
+                          <p className="text-sm text-white/80 mt-0.5">Pas encore commencé</p>
+                        )}
+                      </div>
+                    </div>
+                    <Link
+                      href={`/child/exercise/${topic}`}
+                      className="bg-white/20 hover:bg-white/30 text-white font-semibold px-4 py-2 rounded-xl text-sm transition-colors"
+                    >
+                      Commencer
+                    </Link>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+
+          <p className="text-center text-gray-400 text-sm mt-10">
+            Tu peux changer d&apos;exercice à tout moment tant que le temps n&apos;est pas écoulé.
+          </p>
+        </div>
       </div>
-    </div>
+    </ChildHomeGate>
   )
 }
