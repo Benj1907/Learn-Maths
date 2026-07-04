@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { useSessionTimer } from '@/lib/session-timer'
 import {
   generateDivisionQuestion,
   generateFractionAdditionQuestion,
@@ -14,8 +15,6 @@ import {
 } from '@/lib/exercises'
 import type { Difficulty, ExerciseQuestion, Topic } from '@/types'
 import { DIFFICULTY_DESCRIPTIONS, DIFFICULTY_EMOJI, DIFFICULTY_LABELS, TOPIC_LABELS } from '@/types'
-
-const TOTAL = 10
 
 function FractionDisplay({ num, den }: { num: number; den: number }) {
   if (den === 1) return <span className="text-2xl font-bold">{num}</span>
@@ -72,17 +71,18 @@ export default function ExercisePage() {
   const params = useParams()
   const router = useRouter()
   const topic = params.topic as Topic
+  const { active: sessionActive } = useSessionTimer()
 
   const [difficulty, setDifficulty] = useState<Difficulty | null>(null)
-  const [questions, setQuestions] = useState<ExerciseQuestion[]>([])
-  const [currentIdx, setCurrentIdx] = useState(0)
+  const [currentQ, setCurrentQ] = useState<ExerciseQuestion | null>(null)
+  const [questionNum, setQuestionNum] = useState(1)
+  const [answeredCount, setAnsweredCount] = useState(0)
   const [answer, setAnswer] = useState('')
   const [fracNum, setFracNum] = useState('')
   const [fracDen, setFracDen] = useState('')
   const [submitted, setSubmitted] = useState(false)
   const [isCorrect, setIsCorrect] = useState(false)
   const [score, setScore] = useState(0)
-  const [done, setDone] = useState(false)
   const [userId, setUserId] = useState<string | null>(null)
 
   const supabase = createClient()
@@ -94,20 +94,22 @@ export default function ExercisePage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  function startSession(d: Difficulty) {
-    const qs: ExerciseQuestion[] = Array.from({ length: TOTAL }, () => generateQuestion(topic, d))
+  // No overall session running (e.g. direct link, or it already ended) — nothing to do here.
+  useEffect(() => {
+    if (!sessionActive) router.replace('/child')
+  }, [sessionActive, router])
+
+  function startTopicSession(d: Difficulty) {
     setDifficulty(d)
-    setQuestions(qs)
-    setCurrentIdx(0)
+    setCurrentQ(generateQuestion(topic, d))
+    setQuestionNum(1)
     setScore(0)
+    setAnsweredCount(0)
     setAnswer('')
     setFracNum('')
     setFracDen('')
     setSubmitted(false)
-    setDone(false)
   }
-
-  const currentQ = questions[currentIdx]
 
   const handleSubmit = useCallback(
     async (selectedOption?: string) => {
@@ -155,6 +157,7 @@ export default function ExercisePage() {
   ) {
     setSubmitted(true)
     setIsCorrect(correct)
+    setAnsweredCount((c) => c + 1)
     if (correct) setScore((s) => s + 1)
 
     if (userId) {
@@ -177,20 +180,20 @@ export default function ExercisePage() {
   }
 
   function nextQuestion() {
-    if (currentIdx + 1 >= TOTAL) {
-      setDone(true)
-    } else {
-      setCurrentIdx((i) => i + 1)
-      setAnswer('')
-      setFracNum('')
-      setFracDen('')
-      setSubmitted(false)
-    }
+    if (!difficulty) return
+    setCurrentQ(generateQuestion(topic, difficulty))
+    setQuestionNum((n) => n + 1)
+    setAnswer('')
+    setFracNum('')
+    setFracDen('')
+    setSubmitted(false)
   }
 
   if (!TOPIC_LABELS[topic]) {
     return <p className="p-8 text-center text-red-500">Thème inconnu.</p>
   }
+
+  if (!sessionActive) return null
 
   if (!difficulty) {
     return (
@@ -208,7 +211,7 @@ export default function ExercisePage() {
             {(['verte', 'orange', 'noire'] as Difficulty[]).map((d) => (
               <button
                 key={d}
-                onClick={() => startSession(d)}
+                onClick={() => startTopicSession(d)}
                 className="w-full flex items-center gap-4 border-2 border-gray-100 hover:border-indigo-400 hover:bg-indigo-50 rounded-xl px-4 py-3 transition-colors text-left"
               >
                 <span className="text-2xl">{DIFFICULTY_EMOJI[d]}</span>
@@ -224,82 +227,23 @@ export default function ExercisePage() {
     )
   }
 
-  if (done) {
-    const stars = score >= 8 ? 3 : score >= 6 ? 2 : score >= 4 ? 1 : 0
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
-        <div className="bg-white rounded-2xl shadow-lg p-8 max-w-sm w-full text-center">
-          <div className="text-5xl mb-4">🎉</div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-1">Exercice terminé !</h2>
-          <p className="text-sm text-gray-400 mb-3">{DIFFICULTY_EMOJI[difficulty]} {DIFFICULTY_LABELS[difficulty]}</p>
-          <p className="text-5xl font-extrabold text-indigo-600 my-4">{score}/{TOTAL}</p>
-          <p className="text-3xl mb-6">{'⭐'.repeat(stars)}{'☆'.repeat(3 - stars)}</p>
-          <p className="text-gray-500 text-sm mb-6">
-            {score === TOTAL
-              ? 'Parfait ! Bravo !'
-              : score >= 8
-              ? 'Excellent travail !'
-              : score >= 6
-              ? 'Bien joué, continue comme ça !'
-              : score >= 4
-              ? 'Pas mal, entraîne-toi encore !'
-              : 'Continue, tu vas y arriver !'}
-          </p>
-          <div className="space-y-3">
-            <button
-              onClick={() => startSession(difficulty)}
-              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2.5 rounded-xl transition-colors"
-            >
-              Recommencer
-            </button>
-            <button
-              onClick={() => setDifficulty(null)}
-              className="w-full border border-gray-200 hover:bg-gray-50 text-gray-600 font-semibold py-2.5 rounded-xl transition-colors"
-            >
-              Changer de niveau
-            </button>
-            <button
-              onClick={() => router.push('/child')}
-              className="w-full border border-gray-300 hover:bg-gray-50 text-gray-700 font-semibold py-2.5 rounded-xl transition-colors"
-            >
-              Choisir un autre thème
-            </button>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  const progress = Math.round((currentIdx / TOTAL) * 100)
+  if (!currentQ) return null
 
   return (
     <div className="min-h-screen bg-gray-50 px-4 py-8">
       <div className="max-w-lg mx-auto">
         {/* Header */}
-        <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center justify-between mb-4">
           <button
             onClick={() => router.push('/child')}
             className="text-sm text-gray-500 hover:text-gray-700"
           >
-            ← Retour
+            ← Changer d&apos;exercice
           </button>
-          <span className="text-sm font-medium text-gray-600">
-            {currentIdx + 1} / {TOTAL}
+          <span className="text-xs uppercase tracking-wide text-gray-400">
+            {TOPIC_LABELS[topic]} · Question {questionNum}
           </span>
         </div>
-
-        {/* Progress bar */}
-        <div className="w-full bg-gray-200 rounded-full h-2.5 mb-6">
-          <div
-            className="bg-indigo-500 h-2.5 rounded-full transition-all"
-            style={{ width: `${progress}%` }}
-          />
-        </div>
-
-        {/* Topic label */}
-        <p className="text-xs uppercase tracking-wide text-gray-400 mb-1">
-          {TOPIC_LABELS[topic]}
-        </p>
 
         {/* Question card */}
         <div className="bg-white rounded-2xl shadow p-6 mb-4">
@@ -401,13 +345,13 @@ export default function ExercisePage() {
             onClick={nextQuestion}
             className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 rounded-xl transition-colors"
           >
-            {currentIdx + 1 < TOTAL ? 'Question suivante →' : 'Voir les résultats'}
+            Question suivante →
           </button>
         )}
 
         {/* Running score */}
         <p className="text-center text-sm text-gray-400 mt-4">
-          Score actuel : {score} / {currentIdx + (submitted ? 1 : 0)}
+          Score actuel : {score} / {answeredCount}
         </p>
       </div>
     </div>
