@@ -73,6 +73,19 @@ export const TOPIC_ICONS: Record<Topic, string> = {
   fractions_multiplication: '×',
 }
 
+export type Grade = 'CP' | 'CE1' | 'CE2' | 'CM1' | 'CM2' | 'sixieme'
+
+export const GRADES: Grade[] = ['CP', 'CE1', 'CE2', 'CM1', 'CM2', 'sixieme']
+
+export const GRADE_LABELS: Record<Grade, string> = {
+  CP: 'CP',
+  CE1: 'CE1',
+  CE2: 'CE2',
+  CM1: 'CM1',
+  CM2: 'CM2',
+  sixieme: '6ème',
+}
+
 export type Difficulty = 'verte' | 'orange' | 'noire'
 
 export const DIFFICULTY_LABELS: Record<Difficulty, string> = {

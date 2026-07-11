@@ -2,17 +2,20 @@
 
 import { useSyncExternalStore } from 'react'
 import { useRouter } from 'next/navigation'
+import type { Grade } from '@/types'
 
 const END_AT_KEY = 'session-end-at'
 const DURATION_KEY = 'session-duration-mins'
+const GRADE_KEY = 'session-grade'
 
 type SessionSnapshot = {
   duration: number | null
   timeLeft: number
   active: boolean
+  grade: Grade | null
 }
 
-const SERVER_SNAPSHOT: SessionSnapshot = { duration: null, timeLeft: 0, active: false }
+const SERVER_SNAPSHOT: SessionSnapshot = { duration: null, timeLeft: 0, active: false, grade: null }
 
 let cachedSnapshot: SessionSnapshot = SERVER_SNAPSHOT
 let listeners: Array<() => void> = []
@@ -20,11 +23,13 @@ let listeners: Array<() => void> = []
 function computeSnapshot(): SessionSnapshot {
   const endAt = sessionStorage.getItem(END_AT_KEY)
   const dur = sessionStorage.getItem(DURATION_KEY)
-  if (!endAt || !dur) return { duration: null, timeLeft: 0, active: false }
+  const grade = sessionStorage.getItem(GRADE_KEY) as Grade | null
+  if (!endAt || !dur) return { duration: null, timeLeft: 0, active: false, grade }
   return {
     duration: parseInt(dur),
     timeLeft: Math.max(0, Math.round((parseInt(endAt) - Date.now()) / 1000)),
     active: true,
+    grade,
   }
 }
 
@@ -53,6 +58,11 @@ function getServerSnapshot(): SessionSnapshot {
   return SERVER_SNAPSHOT
 }
 
+export function selectGrade(grade: Grade) {
+  sessionStorage.setItem(GRADE_KEY, grade)
+  notify()
+}
+
 export function startSession(minutes: number) {
   const endAt = Date.now() + minutes * 60 * 1000
   sessionStorage.setItem(END_AT_KEY, String(endAt))
@@ -63,6 +73,7 @@ export function startSession(minutes: number) {
 export function endSession() {
   sessionStorage.removeItem(END_AT_KEY)
   sessionStorage.removeItem(DURATION_KEY)
+  sessionStorage.removeItem(GRADE_KEY)
   notify()
 }
 
@@ -79,6 +90,7 @@ export function useSessionTimer() {
     timeUp: snapshot.active && snapshot.timeLeft <= 0,
     startSession,
     endSession,
+    selectGrade,
   }
 }
 
