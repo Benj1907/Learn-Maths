@@ -119,7 +119,16 @@ export function SessionTimerBar() {
 
   return (
     <div className="sticky top-0 z-10 bg-indigo-600 text-white text-sm px-4 py-2.5 text-center font-medium">
-      ⏱️ {formatTime(timeLeft)} restantes
+      ⏱️ {formatTime(timeLeft)} restantes{' '}
+      <button
+        onClick={() => {
+          endSession()
+          router.push('/child')
+        }}
+        className="underline font-normal"
+      >
+        Arrêter
+      </button>
     </div>
   )
 }
